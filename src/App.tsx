@@ -98,8 +98,13 @@ export default function App() {
   };
 
   const playSong = (song: Song) => {
+    setIsPlaying(false);
+    setIsReady(false);
     setCurrentSong(song);
-    setIsPlaying(true);
+    // Small delay to ensure state updates before playing
+    setTimeout(() => {
+      setIsPlaying(true);
+    }, 100);
   };
 
   const togglePlay = () => setIsPlaying(!isPlaying);
@@ -123,6 +128,8 @@ export default function App() {
       document.body.removeChild(link);
     }
   };
+
+  const [isReady, setIsReady] = useState(false);
 
   const Player = ReactPlayer as any;
 
@@ -437,11 +444,24 @@ export default function App() {
           <Player
             ref={playerRef}
             url={getHighQualityDownload(currentSong) || ""}
-            playing={isPlaying}
+            playing={isPlaying && isReady}
             volume={volume}
+            onReady={(player: any) => {
+              setIsReady(true);
+              if (player && typeof player.getDuration === 'function') {
+                setDuration(player.getDuration());
+              }
+            }}
             onProgress={handleProgress}
-            onDuration={handleDuration}
             onEnded={() => setIsPlaying(false)}
+            config={{
+              file: {
+                forceAudio: true,
+                attributes: {
+                  controlsList: 'nodownload'
+                }
+              }
+            }}
           />
         </div>
       )}
