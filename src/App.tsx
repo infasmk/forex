@@ -109,6 +109,32 @@ export default function App() {
 
   const togglePlay = () => setIsPlaying(!isPlaying);
 
+  const handleSkipForward = () => {
+    const queue = activeTab === "library" ? favorites : songs;
+    if (queue.length === 0 || !currentSong) return;
+    
+    const currentIndex = queue.findIndex(s => s.id === currentSong.id);
+    if (currentIndex === -1) {
+      playSong(queue[0]);
+      return;
+    }
+    const nextIndex = (currentIndex + 1) % queue.length;
+    playSong(queue[nextIndex]);
+  };
+
+  const handleSkipBack = () => {
+    const queue = activeTab === "library" ? favorites : songs;
+    if (queue.length === 0 || !currentSong) return;
+    
+    const currentIndex = queue.findIndex(s => s.id === currentSong.id);
+    if (currentIndex === -1) {
+      playSong(queue[0]);
+      return;
+    }
+    const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
+    playSong(queue[prevIndex]);
+  };
+
   const handleProgress = (state: any) => {
     setProgress(state.playedSeconds);
   };
@@ -130,6 +156,25 @@ export default function App() {
   };
 
   const [isReady, setIsReady] = useState(false);
+  const [favorites, setFavorites] = useState<Song[]>(() => {
+    const saved = localStorage.getItem("bloomee_favorites");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("bloomee_favorites", JSON.stringify(favorites));
+  }, [favorites]);
+
+  const toggleFavorite = (song: Song) => {
+    setFavorites(prev => {
+      const isFav = prev.some(s => s.id === song.id);
+      if (isFav) {
+        return prev.filter(s => s.id !== song.id);
+      } else {
+        return [...prev, song];
+      }
+    });
+  };
 
   const Player = ReactPlayer as any;
 
@@ -171,7 +216,7 @@ export default function App() {
               <span className="hidden lg:block font-medium">Search</span>
             </button>
             <button 
-              onClick={() => setActiveTab("library")}
+              onClick={() => { setActiveTab("library"); setSongs(favorites); }}
               className={cn(
                 "flex items-center gap-4 p-3 rounded-xl transition-all duration-200",
                 activeTab === "library" ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white"
@@ -242,7 +287,11 @@ export default function App() {
                 <h2 className="text-4xl font-serif italic font-bold mb-2">
                   {activeTab === "trending" ? "Trending Now" : activeTab === "search" ? "Search Results" : "Your Library"}
                 </h2>
-                <p className="text-white/50">Discover the latest hits and your favorite tracks.</p>
+                <p className="text-white/50">
+                  {activeTab === "library" 
+                    ? `You have ${favorites.length} favorite tracks.` 
+                    : "Discover the latest hits and your favorite tracks."}
+                </p>
               </header>
 
               {isLoading ? (
@@ -258,7 +307,7 @@ export default function App() {
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                   <AnimatePresence mode="popLayout">
-                    {songs.map((song) => (
+                    {(activeTab === "library" ? favorites : songs).map((song) => (
                       <motion.div
                         key={song.id}
                         layout
@@ -281,6 +330,15 @@ export default function App() {
                               className="w-12 h-12 bg-[var(--color-accent)] rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 transition-transform"
                             >
                               <Play fill="currentColor" size={20} />
+                            </button>
+                            <button 
+                              onClick={() => toggleFavorite(song)}
+                              className={cn(
+                                "w-10 h-10 backdrop-blur-md rounded-full flex items-center justify-center transition-colors",
+                                favorites.some(s => s.id === song.id) ? "bg-[var(--color-accent)] text-white" : "bg-white/20 text-white hover:bg-white/30"
+                              )}
+                            >
+                              <Heart size={18} fill={favorites.some(s => s.id === song.id) ? "currentColor" : "none"} />
                             </button>
                             <button 
                               onClick={() => handleDownload(song)}
@@ -347,7 +405,15 @@ export default function App() {
                       <motion.p layoutId="player-artist" className="text-2xl text-white/50 mb-8">{currentSong.primaryArtists}</motion.p>
                       
                       <div className="flex items-center justify-center md:justify-start gap-8 mb-12">
-                        <button className="text-white/40 hover:text-white transition-colors"><Heart size={28} /></button>
+                        <button 
+                          onClick={() => toggleFavorite(currentSong)}
+                          className={cn(
+                            "transition-colors",
+                            favorites.some(s => s.id === currentSong.id) ? "text-[var(--color-accent)]" : "text-white/40 hover:text-white"
+                          )}
+                        >
+                          <Heart size={28} fill={favorites.some(s => s.id === currentSong.id) ? "currentColor" : "none"} />
+                        </button>
                         <button onClick={() => handleDownload(currentSong)} className="text-white/40 hover:text-white transition-colors"><Download size={28} /></button>
                       </div>
 
@@ -367,14 +433,14 @@ export default function App() {
                         </div>
 
                         <div className="flex items-center justify-center gap-10">
-                          <button className="text-white/40 hover:text-white"><SkipBack size={32} /></button>
+                          <button onClick={handleSkipBack} className="text-white/40 hover:text-white"><SkipBack size={32} /></button>
                           <button 
                             onClick={togglePlay}
                             className="w-20 h-20 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform"
                           >
                             {isPlaying ? <Pause fill="currentColor" size={32} /> : <Play fill="currentColor" size={32} className="ml-1" />}
                           </button>
-                          <button className="text-white/40 hover:text-white"><SkipForward size={32} /></button>
+                          <button onClick={handleSkipForward} className="text-white/40 hover:text-white"><SkipForward size={32} /></button>
                         </div>
                       </div>
                     </div>
@@ -394,19 +460,27 @@ export default function App() {
                       <motion.h4 layoutId="player-title" className="font-medium truncate text-white/90">{currentSong.name}</motion.h4>
                       <motion.p layoutId="player-artist" className="text-xs text-white/40 truncate">{currentSong.primaryArtists}</motion.p>
                     </div>
-                    <button className="ml-2 text-white/30 hover:text-white transition-colors"><Heart size={18} /></button>
+                    <button 
+                      onClick={() => toggleFavorite(currentSong)}
+                      className={cn(
+                        "ml-2 transition-colors",
+                        favorites.some(s => s.id === currentSong.id) ? "text-[var(--color-accent)]" : "text-white/30 hover:text-white"
+                      )}
+                    >
+                      <Heart size={18} fill={favorites.some(s => s.id === currentSong.id) ? "currentColor" : "none"} />
+                    </button>
                   </div>
 
                   <div className="flex flex-col items-center gap-2 w-1/3">
                     <div className="flex items-center gap-6">
-                      <button className="text-white/40 hover:text-white transition-colors"><SkipBack size={20} /></button>
+                      <button onClick={handleSkipBack} className="text-white/40 hover:text-white transition-colors"><SkipBack size={20} /></button>
                       <button 
                         onClick={togglePlay}
                         className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform"
                       >
                         {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} className="ml-0.5" />}
                       </button>
-                      <button className="text-white/40 hover:text-white transition-colors"><SkipForward size={20} /></button>
+                      <button onClick={handleSkipForward} className="text-white/40 hover:text-white transition-colors"><SkipForward size={20} /></button>
                     </div>
                     <div className="w-full max-w-md flex items-center gap-3">
                       <span className="text-[10px] text-white/30 font-mono w-8 text-right">{formatDuration(progress)}</span>
@@ -453,7 +527,7 @@ export default function App() {
               }
             }}
             onProgress={handleProgress}
-            onEnded={() => setIsPlaying(false)}
+            onEnded={handleSkipForward}
             config={{
               file: {
                 forceAudio: true,
