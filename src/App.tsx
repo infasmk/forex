@@ -66,32 +66,36 @@ export default function App() {
     }
   };
 
-  const [searchSource, setSearchSource] = useState<"saavn" | "youtube" | "youtube-music">("saavn");
+  const [searchSource, setSearchSource] = useState<"soundcloud" | "youtube">("soundcloud");
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setIsLoading(true);
     try {
-      const endpoint = searchSource === "saavn" 
-        ? `/api/search/songs?query=${encodeURIComponent(searchQuery)}`
-        : searchSource === "youtube"
-        ? `/api/youtube/search?query=${encodeURIComponent(searchQuery)}`
-        : `/api/youtube-music/search?query=${encodeURIComponent(searchQuery)}`;
+      const endpoint = searchSource === "soundcloud" 
+        ? `/api/soundcloud/search?query=${encodeURIComponent(searchQuery)}`
+        : `/api/youtube/search?query=${encodeURIComponent(searchQuery)}`;
 
       const res = await fetch(endpoint);
-      if (!res.ok) throw new Error("Search failed");
       const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.error || "Search failed");
+      }
+
       if (data && data.data && data.data.results) {
         setSongs(data.data.results);
       } else if (data && data.results) {
         setSongs(data.results);
       } else {
-        console.warn("Unexpected API response structure", data);
+        setSongs([]);
+        console.warn("No results found or unexpected structure", data);
       }
       setActiveTab("search");
-    } catch (error) {
-      console.error("Search failed", error);
+    } catch (error: any) {
+      console.error("Search error:", error);
+      alert(`Search Error: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -143,6 +147,14 @@ export default function App() {
     setDuration(dur);
   };
 
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newProgress = parseFloat(e.target.value);
+    setProgress(newProgress);
+    if (playerRef.current) {
+      playerRef.current.seekTo(newProgress);
+    }
+  };
+
   const handleDownload = (song: Song) => {
     const url = getHighQualityDownload(song);
     if (url) {
@@ -184,60 +196,23 @@ export default function App() {
       <div className="fixed inset-0 atmosphere z-0" />
 
       {/* Main Content */}
-      <div className="relative z-10 flex flex-1 h-screen overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-20 lg:w-64 glass border-r border-white/5 flex flex-col p-4 gap-8">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-10 h-10 bg-[var(--color-accent)] rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/20">
-              <Music className="text-white" size={24} />
-            </div>
-            <span className="hidden lg:block font-serif text-xl italic font-bold tracking-tight">Bloomee</span>
-          </div>
-
-          <nav className="flex flex-col gap-2">
-            <button 
-              onClick={() => { setActiveTab("trending"); fetchTrending(); }}
-              className={cn(
-                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200",
-                activeTab === "trending" ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white"
-              )}
-            >
-              <TrendingUp size={20} />
-              <span className="hidden lg:block font-medium">Trending</span>
-            </button>
-            <button 
-              onClick={() => setActiveTab("search")}
-              className={cn(
-                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200",
-                activeTab === "search" ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white"
-              )}
-            >
-              <Search size={20} />
-              <span className="hidden lg:block font-medium">Search</span>
-            </button>
-            <button 
-              onClick={() => { setActiveTab("library"); setSongs(favorites); }}
-              className={cn(
-                "flex items-center gap-4 p-3 rounded-xl transition-all duration-200",
-                activeTab === "library" ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white"
-              )}
-            >
-              <Library size={20} />
-              <span className="hidden lg:block font-medium">Library</span>
-            </button>
-          </nav>
-        </aside>
-
+      <div className="relative z-10 flex flex-col flex-1 h-screen overflow-hidden">
         {/* Main View */}
         <main className="flex-1 flex flex-col overflow-hidden">
           {/* Header / Search */}
           <header className="p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 px-2 md:hidden mb-2">
+              <div className="w-8 h-8 bg-[var(--color-accent)] rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/20">
+                <Music className="text-white" size={18} />
+              </div>
+              <span className="font-serif text-lg italic font-bold tracking-tight">Bloomee</span>
+            </div>
             <div className="flex flex-col gap-3 w-full max-w-xl">
               <form onSubmit={handleSearch} className="relative w-full">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={18} />
                 <input 
                   type="text"
-                  placeholder={`Search on ${searchSource === "saavn" ? "JioSaavn" : searchSource === "youtube" ? "YouTube" : "YouTube Music"}...`}
+                  placeholder={`Search on ${searchSource === "soundcloud" ? "SoundCloud" : "YouTube"}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 transition-all placeholder:text-white/20"
@@ -245,13 +220,13 @@ export default function App() {
               </form>
               <div className="flex items-center gap-2 px-1">
                 <button 
-                  onClick={() => setSearchSource("saavn")}
+                  onClick={() => setSearchSource("soundcloud")}
                   className={cn(
                     "px-3 py-1 rounded-full text-xs font-medium transition-all",
-                    searchSource === "saavn" ? "bg-[var(--color-accent)] text-white" : "bg-white/5 text-white/40 hover:bg-white/10"
+                    searchSource === "soundcloud" ? "bg-[var(--color-accent)] text-white" : "bg-white/5 text-white/40 hover:bg-white/10"
                   )}
                 >
-                  JioSaavn
+                  SoundCloud
                 </button>
                 <button 
                   onClick={() => setSearchSource("youtube")}
@@ -261,15 +236,6 @@ export default function App() {
                   )}
                 >
                   YouTube
-                </button>
-                <button 
-                  onClick={() => setSearchSource("youtube-music")}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-xs font-medium transition-all",
-                    searchSource === "youtube-music" ? "bg-[var(--color-accent)] text-white" : "bg-white/5 text-white/40 hover:bg-white/10"
-                  )}
-                >
-                  YouTube Music
                 </button>
               </div>
             </div>
@@ -281,7 +247,7 @@ export default function App() {
           </header>
 
           {/* Content Area */}
-          <div className="flex-1 overflow-y-auto p-6 no-scrollbar pb-32">
+          <div className="flex-1 overflow-y-auto p-6 no-scrollbar pb-40">
             <div className="max-w-6xl mx-auto">
               <header className="mb-8">
                 <h2 className="text-4xl font-serif italic font-bold mb-2">
@@ -358,6 +324,40 @@ export default function App() {
             </div>
           </div>
         </main>
+
+        {/* Bottom Navigation */}
+        <nav className="h-20 glass border-t border-white/5 flex items-center justify-around px-6 relative z-50">
+          <button 
+            onClick={() => { setActiveTab("trending"); fetchTrending(); }}
+            className={cn(
+              "flex flex-col items-center gap-1 transition-all duration-200",
+              activeTab === "trending" ? "text-[var(--color-accent)]" : "text-white/40 hover:text-white"
+            )}
+          >
+            <TrendingUp size={24} />
+            <span className="text-[10px] font-medium uppercase tracking-widest">Trending</span>
+          </button>
+          <button 
+            onClick={() => setActiveTab("search")}
+            className={cn(
+              "flex flex-col items-center gap-1 transition-all duration-200",
+              activeTab === "search" ? "text-[var(--color-accent)]" : "text-white/40 hover:text-white"
+            )}
+          >
+            <Search size={24} />
+            <span className="text-[10px] font-medium uppercase tracking-widest">Search</span>
+          </button>
+          <button 
+            onClick={() => { setActiveTab("library"); setSongs(favorites); }}
+            className={cn(
+              "flex flex-col items-center gap-1 transition-all duration-200",
+              activeTab === "library" ? "text-[var(--color-accent)]" : "text-white/40 hover:text-white"
+            )}
+          >
+            <Library size={24} />
+            <span className="text-[10px] font-medium uppercase tracking-widest">Library</span>
+          </button>
+        </nav>
       </div>
 
       {/* Player Bar */}
@@ -367,16 +367,27 @@ export default function App() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             className={cn(
-              "fixed bottom-0 left-0 right-0 z-50 transition-all duration-500",
-              isPlayerExpanded ? "h-screen" : "h-24"
+              "fixed z-50 transition-all duration-500",
+              isPlayerExpanded ? "inset-0 h-screen" : "bottom-20 left-2 right-2 h-20"
             )}
           >
             <div className={cn(
-              "h-full glass border-t border-white/10 flex flex-col",
-              isPlayerExpanded ? "p-8" : "px-6"
+              "h-full glass flex flex-col relative overflow-hidden",
+              isPlayerExpanded ? "p-8" : "px-4 rounded-2xl border border-white/10 shadow-2xl"
             )}>
+              {isPlayerExpanded && (
+                <div 
+                  className="absolute inset-0 z-0 opacity-30 blur-[100px] scale-110 pointer-events-none"
+                  style={{ 
+                    backgroundImage: `url(${getHighQualityImage(currentSong)})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center'
+                  }}
+                />
+              )}
+
               {isPlayerExpanded ? (
-                <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+                <div className="relative z-10 flex-1 flex flex-col max-w-4xl mx-auto w-full">
                   <div className="flex justify-between items-center mb-8">
                     <button onClick={() => setIsPlayerExpanded(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                       <Minimize2 size={24} />
@@ -401,8 +412,8 @@ export default function App() {
                     </motion.div>
 
                     <div className="flex-1 flex flex-col justify-center text-center md:text-left">
-                      <motion.h2 layoutId="player-title" className="text-5xl font-serif font-bold mb-4">{currentSong.name}</motion.h2>
-                      <motion.p layoutId="player-artist" className="text-2xl text-white/50 mb-8">{currentSong.primaryArtists}</motion.p>
+                      <motion.h2 layoutId="player-title" className="text-5xl font-serif font-bold mb-4 line-clamp-2">{currentSong.name}</motion.h2>
+                      <motion.p layoutId="player-artist" className="text-2xl text-white/50 mb-8 truncate">{currentSong.primaryArtists}</motion.p>
                       
                       <div className="flex items-center justify-center md:justify-start gap-8 mb-12">
                         <button 
@@ -420,12 +431,14 @@ export default function App() {
                       {/* Expanded Controls */}
                       <div className="space-y-6">
                         <div className="space-y-2">
-                          <div className="relative h-1.5 bg-white/10 rounded-full overflow-hidden cursor-pointer">
-                            <div 
-                              className="absolute h-full bg-[var(--color-accent)]" 
-                              style={{ width: `${(progress / duration) * 100}%` }}
-                            />
-                          </div>
+                          <input 
+                            type="range"
+                            min={0}
+                            max={duration || 0}
+                            value={progress}
+                            onChange={handleSeek}
+                            className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-[var(--color-accent)]"
+                          />
                           <div className="flex justify-between text-xs text-white/40 font-mono">
                             <span>{formatDuration(progress)}</span>
                             <span>{formatDuration(duration)}</span>
@@ -447,18 +460,18 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-between h-full">
+                <div className="flex items-center justify-between h-full relative z-10">
                   <div className="flex items-center gap-4 w-1/3">
                     <motion.div 
                       layoutId="player-art"
                       onClick={() => setIsPlayerExpanded(true)}
-                      className="w-14 h-14 rounded-xl overflow-hidden cursor-pointer shadow-lg"
+                      className="w-12 h-12 rounded-lg overflow-hidden cursor-pointer shadow-lg"
                     >
                       <img src={getHighQualityImage(currentSong)} alt={currentSong.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </motion.div>
                     <div className="flex flex-col min-w-0">
-                      <motion.h4 layoutId="player-title" className="font-medium truncate text-white/90">{currentSong.name}</motion.h4>
-                      <motion.p layoutId="player-artist" className="text-xs text-white/40 truncate">{currentSong.primaryArtists}</motion.p>
+                      <motion.h4 layoutId="player-title" className="font-medium truncate text-white/90 text-sm">{currentSong.name}</motion.h4>
+                      <motion.p layoutId="player-artist" className="text-[10px] text-white/40 truncate">{currentSong.primaryArtists}</motion.p>
                     </div>
                     <button 
                       onClick={() => toggleFavorite(currentSong)}
@@ -467,42 +480,50 @@ export default function App() {
                         favorites.some(s => s.id === currentSong.id) ? "text-[var(--color-accent)]" : "text-white/30 hover:text-white"
                       )}
                     >
-                      <Heart size={18} fill={favorites.some(s => s.id === currentSong.id) ? "currentColor" : "none"} />
+                      <Heart size={16} fill={favorites.some(s => s.id === currentSong.id) ? "currentColor" : "none"} />
                     </button>
                   </div>
 
-                  <div className="flex flex-col items-center gap-2 w-1/3">
+                  <div className="flex flex-col items-center gap-1 w-1/3">
                     <div className="flex items-center gap-6">
-                      <button onClick={handleSkipBack} className="text-white/40 hover:text-white transition-colors"><SkipBack size={20} /></button>
+                      <button onClick={handleSkipBack} className="text-white/40 hover:text-white transition-colors"><SkipBack size={18} /></button>
                       <button 
                         onClick={togglePlay}
-                        className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform"
+                        className="w-9 h-9 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 transition-transform"
                       >
-                        {isPlaying ? <Pause fill="currentColor" size={20} /> : <Play fill="currentColor" size={20} className="ml-0.5" />}
+                        {isPlaying ? <Pause fill="currentColor" size={18} /> : <Play fill="currentColor" size={18} className="ml-0.5" />}
                       </button>
-                      <button onClick={handleSkipForward} className="text-white/40 hover:text-white transition-colors"><SkipForward size={20} /></button>
+                      <button onClick={handleSkipForward} className="text-white/40 hover:text-white transition-colors"><SkipForward size={18} /></button>
                     </div>
-                    <div className="w-full max-w-md flex items-center gap-3">
-                      <span className="text-[10px] text-white/30 font-mono w-8 text-right">{formatDuration(progress)}</span>
-                      <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[var(--color-accent)]" 
-                          style={{ width: `${(progress / duration) * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-white/30 font-mono w-8">{formatDuration(duration)}</span>
+                    <div className="w-full max-w-md flex items-center gap-2">
+                      <span className="text-[9px] text-white/30 font-mono w-7 text-right">{formatDuration(progress)}</span>
+                      <input 
+                        type="range"
+                        min={0}
+                        max={duration || 0}
+                        value={progress}
+                        onChange={handleSeek}
+                        className="flex-1 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-[var(--color-accent)]"
+                      />
+                      <span className="text-[9px] text-white/30 font-mono w-7">{formatDuration(duration)}</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-6 w-1/3">
-                    <div className="flex items-center gap-2">
-                      <Volume2 size={18} className="text-white/40" />
-                      <div className="w-24 h-1 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-white/60" style={{ width: `${volume * 100}%` }} />
-                      </div>
+                  <div className="flex items-center justify-end gap-4 w-1/3">
+                    <div className="hidden md:flex items-center gap-2">
+                      <Volume2 size={16} className="text-white/40" />
+                      <input 
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={volume}
+                        onChange={(e) => setVolume(parseFloat(e.target.value))}
+                        className="w-20 h-1 bg-white/10 rounded-full appearance-none cursor-pointer accent-white/60"
+                      />
                     </div>
                     <button onClick={() => setIsPlayerExpanded(true)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                      <Maximize2 size={18} className="text-white/40" />
+                      <Maximize2 size={16} className="text-white/40" />
                     </button>
                   </div>
                 </div>
