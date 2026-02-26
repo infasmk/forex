@@ -1,0 +1,5 @@
+{
+  "name": "BloomeeCloud Music",
+  "description": "A high-performance music streaming app powered by JioSaavn and YouTube, featuring immersive playback and offline downloads.",
+  "requestFramePermissions": []
+}
