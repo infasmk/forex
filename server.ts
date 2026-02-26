@@ -12,74 +12,23 @@ const __dirname = path.dirname(__filename);
 export const app = express();
 app.use(express.json());
 
-const SOUNDCLOUD_CLIENT_ID = process.env.VITE_SOUNDCLOUD_CLIENT_ID || process.env.SOUNDCLOUD_CLIENT_ID;
-
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", environment: process.env.NODE_ENV, vercel: process.env.VERCEL });
+  res.json({ 
+    status: "ok", 
+    environment: process.env.NODE_ENV, 
+    vercel: process.env.VERCEL,
+    engine: "YouTube Only"
+  });
 });
 
-// SoundCloud Search
-app.get("/api/soundcloud/search", async (req, res) => {
-  const { query, limit = 20 } = req.query;
+// Unified Search (YouTube)
+app.get("/api/search", async (req, res) => {
+  const { query } = req.query;
   if (!query) return res.status(400).json({ error: "Query is required" });
 
   try {
-    const isPlaceholder = !SOUNDCLOUD_CLIENT_ID || 
-                         SOUNDCLOUD_CLIENT_ID.includes("your_soundcloud_client_id_here") || 
-                         SOUNDCLOUD_CLIENT_ID.length < 10;
-
-    if (isPlaceholder) {
-      throw new Error("SoundCloud Client ID not configured");
-    }
-
-    const response = await axios.get(`https://api-v2.soundcloud.com/search/tracks`, {
-      params: {
-        q: query,
-        client_id: SOUNDCLOUD_CLIENT_ID,
-        limit: limit,
-        offset: 0
-      },
-      timeout: 8000
-    });
-
-    const songs = response.data.collection.map((track: any) => ({
-      id: track.id.toString(),
-      name: track.title,
-      primaryArtists: track.user.username,
-      image: [{ quality: "high", link: track.artwork_url || track.user.avatar_url }],
-      duration: Math.floor(track.duration / 1000),
-      type: "soundcloud",
-      url: track.permalink_url,
-      downloadUrl: [{ quality: "high", link: track.permalink_url }]
-    }));
-
-    res.json({ data: { results: songs } });
-  } catch (error: any) {
-    console.error("SoundCloud Search Error, falling back to YouTube:", error.message);
-    // Fallback to YouTube Search
-    try {
-      const results = await yts(query as string);
-      const songs = results.videos.slice(0, 20).map(v => ({
-        id: v.videoId,
-        name: v.title,
-        primaryArtists: v.author.name,
-        image: [{ quality: "high", link: v.thumbnail }],
-        duration: v.seconds,
-        type: "youtube",
-        downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
-      }));
-      res.json({ data: { results: songs } });
-    } catch (ytError: any) {
-      res.status(500).json({ error: "Search failed on all platforms", details: ytError.message });
-    }
-  }
-});
-
-// SoundCloud Trending (Popular tracks)
-app.get("/api/trending", async (req, res) => {
-  const fetchYouTubeTrending = async () => {
-    const results = await yts({ query: "trending music", hl: "en", gl: "US" });
-    return results.videos.slice(0, 20).map(v => ({
+    const results = await yts(query as string);
+    const songs = results.videos.slice(0, 25).map(v => ({
       id: v.videoId,
       name: v.title,
       primaryArtists: v.author.name,
@@ -88,87 +37,54 @@ app.get("/api/trending", async (req, res) => {
       type: "youtube",
       downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
     }));
-  };
+    
+    res.json({ data: { results: songs } });
+  } catch (error: any) {
+    console.error("Search Error:", error.message);
+    res.status(500).json({ error: "Search failed" });
+  }
+});
 
+// Trending (YouTube)
+app.get("/api/trending", async (req, res) => {
   try {
-    const isPlaceholder = !SOUNDCLOUD_CLIENT_ID || 
-                         SOUNDCLOUD_CLIENT_ID.includes("your_soundcloud_client_id_here") || 
-                         SOUNDCLOUD_CLIENT_ID.length < 10;
-
-    if (isPlaceholder) {
-      console.info("SoundCloud Client ID is missing or placeholder. Using YouTube fallback.");
-      const songs = await fetchYouTubeTrending();
-      return res.json({ data: { results: songs } });
-    }
-
-    try {
-      // Try SoundCloud featured tracks
-      const response = await axios.get(`https://api-v2.soundcloud.com/featured_tracks/top/all-music`, {
-        params: {
-          client_id: SOUNDCLOUD_CLIENT_ID,
-          limit: 20
-        },
-        timeout: 5000
-      });
-
-      const songs = response.data.collection.map((track: any) => ({
-        id: track.id.toString(),
-        name: track.title,
-        primaryArtists: track.user.username,
-        image: [{ quality: "high", link: track.artwork_url || track.user.avatar_url }],
-        duration: Math.floor(track.duration / 1000),
-        type: "soundcloud",
-        url: track.permalink_url,
-        downloadUrl: [{ quality: "high", link: track.permalink_url }]
-      }));
-
-      return res.json({ data: { results: songs } });
-    } catch (scError: any) {
-      console.warn("SoundCloud Trending failed, falling back to YouTube:", scError.message);
-      const songs = await fetchYouTubeTrending();
-      return res.json({ data: { results: songs } });
-    }
+    const results = await yts({ query: "trending music", hl: "en", gl: "US" });
+    const songs = results.videos.slice(0, 25).map(v => ({
+      id: v.videoId,
+      name: v.title,
+      primaryArtists: v.author.name,
+      image: [{ quality: "high", link: v.thumbnail }],
+      duration: v.seconds,
+      type: "youtube",
+      downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
+    }));
+    
+    res.json({ data: { results: songs } });
   } catch (error: any) {
     console.error("Trending Error:", error.message);
     res.status(500).json({ error: "Failed to fetch trending content" });
   }
 });
 
-// YouTube Search
-app.get("/api/youtube/search", async (req, res) => {
-  try {
-    const { query } = req.query;
-    if (!query) return res.status(400).json({ error: "Query is required" });
-    
-    const results = await yts(query as string);
-    const songs = results.videos.slice(0, 20).map(v => ({
-      id: v.videoId,
-      name: v.title,
-      primaryArtists: v.author.name,
-      image: [{ quality: "high", link: v.thumbnail }],
-      duration: v.seconds,
-      type: "youtube",
-      downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
-    }));
-    
-    res.json({ data: { results: songs } });
-  } catch (error: any) {
-    console.error("YouTube Search Error:", error.message);
-    res.status(500).json({ error: "YouTube search failed" });
-  }
-});
-
 // YouTube Stream Proxy
 app.get("/api/youtube/stream", async (req, res) => {
+  const { id } = req.query;
+  if (!id) return res.status(400).json({ error: "ID is required" });
+
   try {
-    const { id } = req.query;
-    if (!id) return res.status(400).json({ error: "ID is required" });
+    // Check if video is playable
+    const info = await ytdl.getInfo(id as string);
+    const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+    
+    if (!format) {
+      throw new Error("No suitable audio format found");
+    }
 
     res.setHeader('Content-Type', 'audio/mpeg');
-    
+    res.setHeader('Accept-Ranges', 'bytes');
+
     const stream = ytdl(id as string, {
-      quality: 'highestaudio',
-      filter: 'audioonly',
+      format: format,
       highWaterMark: 1 << 25
     });
 

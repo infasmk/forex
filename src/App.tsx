@@ -69,18 +69,12 @@ export default function App() {
     }
   };
 
-  const [searchSource, setSearchSource] = useState<"soundcloud" | "youtube">("soundcloud");
-
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
     setIsLoading(true);
     try {
-      const endpoint = searchSource === "soundcloud" 
-        ? `/api/soundcloud/search?query=${encodeURIComponent(searchQuery)}`
-        : `/api/youtube/search?query=${encodeURIComponent(searchQuery)}`;
-
-      const res = await fetch(endpoint);
+      const res = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}`);
       const data = await res.json();
       
       if (!res.ok) {
@@ -221,32 +215,12 @@ export default function App() {
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={18} />
                 <input 
                   type="text"
-                  placeholder={`Search on ${searchSource === "soundcloud" ? "SoundCloud" : "YouTube"}...`}
+                  placeholder="Search for songs, artists..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pl-12 pr-4 focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]/50 transition-all placeholder:text-white/20"
                 />
               </form>
-              <div className="flex items-center gap-2 px-1">
-                <button 
-                  onClick={() => setSearchSource("soundcloud")}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-xs font-medium transition-all",
-                    searchSource === "soundcloud" ? "bg-[var(--color-accent)] text-white" : "bg-white/5 text-white/40 hover:bg-white/10"
-                  )}
-                >
-                  SoundCloud
-                </button>
-                <button 
-                  onClick={() => setSearchSource("youtube")}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-xs font-medium transition-all",
-                    searchSource === "youtube" ? "bg-[var(--color-accent)] text-white" : "bg-white/5 text-white/40 hover:bg-white/10"
-                  )}
-                >
-                  YouTube
-                </button>
-              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
@@ -595,11 +569,6 @@ export default function App() {
                 forceAudio: true,
                 attributes: {
                   controlsList: 'nodownload'
-                }
-              },
-              soundcloud: {
-                options: {
-                  client_id: import.meta.env.VITE_SOUNDCLOUD_CLIENT_ID || ""
                 }
               }
             }}
