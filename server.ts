@@ -24,7 +24,11 @@ app.get("/api/soundcloud/search", async (req, res) => {
   if (!query) return res.status(400).json({ error: "Query is required" });
 
   try {
-    if (!SOUNDCLOUD_CLIENT_ID) {
+    const isPlaceholder = !SOUNDCLOUD_CLIENT_ID || 
+                         SOUNDCLOUD_CLIENT_ID.includes("your_soundcloud_client_id_here") || 
+                         SOUNDCLOUD_CLIENT_ID.length < 10;
+
+    if (isPlaceholder) {
       throw new Error("SoundCloud Client ID not configured");
     }
 
@@ -87,7 +91,12 @@ app.get("/api/trending", async (req, res) => {
   };
 
   try {
-    if (!SOUNDCLOUD_CLIENT_ID || SOUNDCLOUD_CLIENT_ID.length < 10) {
+    const isPlaceholder = !SOUNDCLOUD_CLIENT_ID || 
+                         SOUNDCLOUD_CLIENT_ID.includes("your_soundcloud_client_id_here") || 
+                         SOUNDCLOUD_CLIENT_ID.length < 10;
+
+    if (isPlaceholder) {
+      console.info("SoundCloud Client ID is missing or placeholder. Using YouTube fallback.");
       const songs = await fetchYouTubeTrending();
       return res.json({ data: { results: songs } });
     }
