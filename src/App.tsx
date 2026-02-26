@@ -39,6 +39,9 @@ export default function App() {
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<"trending" | "search" | "library">("trending");
 
+  const [isBuffering, setIsBuffering] = useState(false);
+  const [playerError, setPlayerError] = useState<string | null>(null);
+
   const playerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -104,6 +107,7 @@ export default function App() {
   const playSong = (song: Song) => {
     setIsPlaying(false);
     setIsReady(false);
+    setPlayerError(null);
     setCurrentSong(song);
     // Small delay to ensure state updates before playing
     setTimeout(() => {
@@ -470,7 +474,11 @@ export default function App() {
                       <img src={getHighQualityImage(currentSong)} alt={currentSong.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                     </motion.div>
                     <div className="flex flex-col min-w-0">
-                      <motion.h4 layoutId="player-title" className="font-medium truncate text-white/90 text-sm">{currentSong.name}</motion.h4>
+                      <motion.h4 layoutId="player-title" className="font-medium truncate text-white/90 text-sm">
+                        {currentSong.name}
+                        {isBuffering && <span className="ml-2 text-[10px] text-[var(--color-accent)] animate-pulse">Loading...</span>}
+                        {playerError && <span className="ml-2 text-[10px] text-red-500">Error!</span>}
+                      </motion.h4>
                       <motion.p layoutId="player-artist" className="text-[10px] text-white/40 truncate">{currentSong.primaryArtists}</motion.p>
                     </div>
                     <button 
@@ -539,13 +547,21 @@ export default function App() {
           <Player
             ref={playerRef}
             url={getHighQualityDownload(currentSong) || ""}
-            playing={isPlaying && isReady}
+            playing={isPlaying}
             volume={volume}
-            onReady={(player: any) => {
+            onReady={() => {
               setIsReady(true);
-              if (player && typeof player.getDuration === 'function') {
-                setDuration(player.getDuration());
+              setPlayerError(null);
+              if (playerRef.current && typeof playerRef.current.getDuration === 'function') {
+                setDuration(playerRef.current.getDuration());
               }
+            }}
+            onBuffer={() => setIsBuffering(true)}
+            onBufferEnd={() => setIsBuffering(false)}
+            onError={(e: any) => {
+              console.error("Playback error:", e);
+              setPlayerError("Failed to play this track.");
+              setIsPlaying(false);
             }}
             onProgress={handleProgress}
             onEnded={handleSkipForward}
@@ -554,6 +570,11 @@ export default function App() {
                 forceAudio: true,
                 attributes: {
                   controlsList: 'nodownload'
+                }
+              },
+              soundcloud: {
+                options: {
+                  client_id: import.meta.env.VITE_SOUNDCLOUD_CLIENT_ID || ""
                 }
               }
             }}

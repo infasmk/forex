@@ -3,11 +3,16 @@ import { createServer as createViteServer } from "vite";
 import axios from "axios";
 import yts from "yt-search";
 import ytdl from "@distube/ytdl-core";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const app = express();
 app.use(express.json());
 
-const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID;
+const SOUNDCLOUD_CLIENT_ID = process.env.VITE_SOUNDCLOUD_CLIENT_ID || process.env.SOUNDCLOUD_CLIENT_ID;
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", environment: process.env.NODE_ENV, vercel: process.env.VERCEL });
@@ -189,7 +194,16 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static("dist"));
+    const distPath = path.resolve(__dirname, "dist");
+    app.use(express.static(distPath));
+    
+    // SPA fallback: serve index.html for any non-API routes
+    app.get("*", (req, res) => {
+      if (req.path.startsWith("/api")) {
+        return res.status(404).json({ error: "API route not found" });
+      }
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   }
 
   if (process.env.VERCEL !== "1") {
