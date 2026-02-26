@@ -173,8 +173,13 @@ export default function App() {
 
   const [isReady, setIsReady] = useState(false);
   const [favorites, setFavorites] = useState<Song[]>(() => {
-    const saved = localStorage.getItem("bloomee_favorites");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem("bloomee_favorites");
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error("Failed to parse favorites from localStorage:", error);
+      return [];
+    }
   });
 
   useEffect(() => {
@@ -274,7 +279,7 @@ export default function App() {
                     </div>
                   ))}
                 </div>
-              ) : (
+              ) : (activeTab === "library" ? favorites : songs).length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                   <AnimatePresence mode="popLayout">
                     {(activeTab === "library" ? favorites : songs).map((song) => (
@@ -323,6 +328,26 @@ export default function App() {
                       </motion.div>
                     ))}
                   </AnimatePresence>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mb-6">
+                    <Music className="text-white/20" size={40} />
+                  </div>
+                  <h3 className="text-xl font-medium mb-2">No songs found</h3>
+                  <p className="text-white/40 max-w-xs mx-auto">
+                    {activeTab === "library" 
+                      ? "Your library is currently empty. Start adding some favorites!" 
+                      : "We couldn't find any tracks. Try searching for something else."}
+                  </p>
+                  {activeTab === "search" && (
+                    <button 
+                      onClick={() => { setActiveTab("trending"); fetchTrending(); }}
+                      className="mt-8 px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors text-sm font-medium"
+                    >
+                      Back to Trending
+                    </button>
+                  )}
                 </div>
               )}
             </div>

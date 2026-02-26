@@ -73,60 +73,55 @@ app.get("/api/soundcloud/search", async (req, res) => {
 
 // SoundCloud Trending (Popular tracks)
 app.get("/api/trending", async (req, res) => {
+  const fetchYouTubeTrending = async () => {
+    const results = await yts({ query: "trending music", hl: "en", gl: "US" });
+    return results.videos.slice(0, 20).map(v => ({
+      id: v.videoId,
+      name: v.title,
+      primaryArtists: v.author.name,
+      image: [{ quality: "high", link: v.thumbnail }],
+      duration: v.seconds,
+      type: "youtube",
+      downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
+    }));
+  };
+
   try {
-    if (!SOUNDCLOUD_CLIENT_ID) {
-      // Fallback to YouTube trending if SoundCloud is not configured
-      const results = await yts("trending music");
-      const songs = results.videos.slice(0, 20).map(v => ({
-        id: v.videoId,
-        name: v.title,
-        primaryArtists: v.author.name,
-        image: [{ quality: "high", link: v.thumbnail }],
-        duration: v.seconds,
-        type: "youtube",
-        downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
-      }));
+    if (!SOUNDCLOUD_CLIENT_ID || SOUNDCLOUD_CLIENT_ID.length < 10) {
+      const songs = await fetchYouTubeTrending();
       return res.json({ data: { results: songs } });
     }
 
-    const response = await axios.get(`https://api-v2.soundcloud.com/featured_tracks/top/all-music`, {
-      params: {
-        client_id: SOUNDCLOUD_CLIENT_ID,
-        limit: 20
-      },
-      timeout: 8000
-    });
+    try {
+      // Try SoundCloud featured tracks
+      const response = await axios.get(`https://api-v2.soundcloud.com/featured_tracks/top/all-music`, {
+        params: {
+          client_id: SOUNDCLOUD_CLIENT_ID,
+          limit: 20
+        },
+        timeout: 5000
+      });
 
-    const songs = response.data.collection.map((track: any) => ({
-      id: track.id.toString(),
-      name: track.title,
-      primaryArtists: track.user.username,
-      image: [{ quality: "high", link: track.artwork_url || track.user.avatar_url }],
-      duration: Math.floor(track.duration / 1000),
-      type: "soundcloud",
-      url: track.permalink_url,
-      downloadUrl: [{ quality: "high", link: track.permalink_url }]
-    }));
+      const songs = response.data.collection.map((track: any) => ({
+        id: track.id.toString(),
+        name: track.title,
+        primaryArtists: track.user.username,
+        image: [{ quality: "high", link: track.artwork_url || track.user.avatar_url }],
+        duration: Math.floor(track.duration / 1000),
+        type: "soundcloud",
+        url: track.permalink_url,
+        downloadUrl: [{ quality: "high", link: track.permalink_url }]
+      }));
 
-    res.json({ data: { results: songs } });
+      return res.json({ data: { results: songs } });
+    } catch (scError: any) {
+      console.warn("SoundCloud Trending failed, falling back to YouTube:", scError.message);
+      const songs = await fetchYouTubeTrending();
+      return res.json({ data: { results: songs } });
+    }
   } catch (error: any) {
     console.error("Trending Error:", error.message);
-    // Final fallback to YouTube
-    try {
-      const results = await yts("trending music");
-      const songs = results.videos.slice(0, 20).map(v => ({
-        id: v.videoId,
-        name: v.title,
-        primaryArtists: v.author.name,
-        image: [{ quality: "high", link: v.thumbnail }],
-        duration: v.seconds,
-        type: "youtube",
-        downloadUrl: [{ quality: "high", link: `/api/youtube/stream?id=${v.videoId}` }]
-      }));
-      res.json({ data: { results: songs } });
-    } catch (e) {
-      res.status(500).json({ error: "Failed to fetch trending" });
-    }
+    res.status(500).json({ error: "Failed to fetch trending content" });
   }
 });
 
@@ -194,7 +189,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, "dist");
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     
     // SPA fallback: serve index.html for any non-API routes
@@ -202,7 +197,8 @@ async function startServer() {
       if (req.path.startsWith("/api")) {
         return res.status(404).json({ error: "API route not found" });
       }
-      res.sendFile(path.join(distPath, "index.html"));
+      const indexPath = path.join(distPath, "index.html");
+      res.sendFile(indexPath);
     });
   }
 
